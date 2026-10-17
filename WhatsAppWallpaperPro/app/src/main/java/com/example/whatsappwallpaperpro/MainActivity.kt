@@ -3,6 +3,7 @@ package com.example.whatsappwallpaperpro
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -34,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable private fun WallpaperTheme(content: @Composable () -> Unit) { MaterialTheme(colorScheme = lightColorScheme(primary=Color(0xFF128C7E), secondary=Color(0xFF25D366)), content=content) }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun WallpaperApp(vm: WallpaperViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     var showExport by remember { mutableStateOf(false) }
@@ -41,8 +44,8 @@ class MainActivity : ComponentActivity() {
     CompositionLocalProvider(LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
         Scaffold(topBar={ TopAppBar(title={ Text("WhatsApp Wallpaper Pro",fontWeight=FontWeight.Bold)}, actions={ IconButton(onClick={}){Icon(Icons.Default.Info,"معلومات")} })}) { padding ->
             Column(Modifier.padding(padding).padding(horizontal=16.dp).fillMaxSize(), verticalArrangement=Arrangement.spacedBy(14.dp)) {
-                if(state.source==null) EmptyHome(onPick={ picker.launch(ActivityResultContracts.PickVisualMedia.ImageOnly) })
-                else Editor(state=state, onPick={ picker.launch(ActivityResultContracts.PickVisualMedia.ImageOnly) }, onBackground=vm::setBackground, onSize=vm::setSize, onZoom=vm::setZoom, onExport={ showExport=true })
+                if(state.source==null) EmptyHome(onPick={ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                else Editor(state=state, onPick={ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, onBackground=vm::setBackground, onSize=vm::setSize, onZoom=vm::setZoom, onExport={ showExport=true })
                 if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 state.message?.let { Text(it,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.SemiBold) }
             }
@@ -55,7 +58,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable private fun Editor(state: com.example.whatsappwallpaperpro.ui.WallpaperUiState,onPick:()->Unit,onBackground:(BackgroundMode)->Unit,onSize:(OutputSize)->Unit,onZoom:(Float)->Unit,onExport:()->Unit){
     Text("المعاينة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-    Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)).background(Color(0xFFECE5DD)),contentAlignment=Alignment.Center){ state.rendered?.let{Image(it.asImageBitmap(),"المعاينة",Modifier.fillMaxSize(),contentScale=ContentScale.Fit)} }
+    Box(Modifier.fillMaxWidth().height(360.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xFFECE5DD)),contentAlignment=Alignment.Center){ state.rendered?.let{Image(it.asImageBitmap(),"المعاينة",Modifier.fillMaxSize(),contentScale=ContentScale.Fit)} }
     OutlinedButton(onClick=onPick,Modifier.fillMaxWidth()){Icon(Icons.Default.ChangeCircle,null);Spacer(Modifier.width(8.dp));Text("تغيير الصورة")}
     Text("الخلفية الذكية",fontWeight=FontWeight.Bold)
     LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){ items(BackgroundMode.entries){ mode -> FilterChip(selected=state.background==mode,onClick={onBackground(mode)},label={Text(when(mode){BackgroundMode.BLUR->"ضبابية";BackgroundMode.SMART_COLOR->"لون ذكي";BackgroundMode.CUSTOM->"لون مخصص"})}) } }
