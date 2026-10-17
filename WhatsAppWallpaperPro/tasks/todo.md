@@ -1,0 +1,5 @@
+- [x] Project scaffold and Android configuration
+- [x] Local bitmap processing and MediaStore export
+- [x] Compose RTL editor and export screens
+- [ ] Build with Android SDK and install Debug APK
+- [ ] Instrumented tests on Android 15 device
