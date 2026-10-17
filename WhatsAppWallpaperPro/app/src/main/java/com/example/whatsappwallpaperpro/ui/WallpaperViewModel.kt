@@ -24,6 +24,7 @@ class WallpaperViewModel(app: Application): AndroidViewModel(app) {
     fun setFormat(format: OutputFormat){ _state.value=_state.value.copy(format=format) }
     fun setQuality(q: Int){ _state.value=_state.value.copy(quality=q) }
     fun setZoom(z: Float){ _state.value=_state.value.copy(zoom=z).rerender() }
+    fun setCustomColor(color: Int){ _state.value=_state.value.copy(customColor=color, background=BackgroundMode.CUSTOM).rerender() }
     fun save(){ val s=_state.value; val b=s.rendered ?: return; viewModelScope.launch(Dispatchers.IO){ _state.value=s.copy(busy=true,message=null); exporter.save(b,s.format,s.quality).onSuccess { _state.value=_state.value.copy(busy=false,message="تم الحفظ في المعرض",savedUri=Uri.parse(it)) }.onFailure { _state.value=_state.value.copy(busy=false,message=it.message ?: "تعذر الحفظ") } } }
     private fun WallpaperUiState.rerender() = copy(rendered=source?.let{ImageProcessor.render(it,selectedSize,background,customColor,zoom)})
 }

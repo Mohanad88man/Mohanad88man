@@ -1,10 +1,12 @@
 package com.example.whatsappwallpaperpro
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -23,12 +25,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.whatsappwallpaperpro.domain.*
+import com.example.whatsappwallpaperpro.ui.WallpaperUiState
 import com.example.whatsappwallpaperpro.ui.WallpaperViewModel
+
+private val customColors = listOf(0xFF263238.toInt(), 0xFF128C7E.toInt(), 0xFF075E54.toInt(), 0xFF34B7F1.toInt(), 0xFFFFC107.toInt(), 0xFF8E24AA.toInt(), 0xFFF4511E.toInt())
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { WallpaperTheme { WallpaperApp() } } }
@@ -39,33 +46,49 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun WallpaperApp(vm: WallpaperViewModel = viewModel()) {
     val state by vm.state.collectAsState()
+    val context = LocalContext.current
     var showExport by remember { mutableStateOf(false) }
-    val picker=rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()){ it?.let(vm::pick) }
-    CompositionLocalProvider(LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
-        Scaffold(topBar={ TopAppBar(title={ Text("WhatsApp Wallpaper Pro",fontWeight=FontWeight.Bold)}, actions={ IconButton(onClick={}){Icon(Icons.Default.Info,"معلومات")} })}) { padding ->
+    var showInfo by remember { mutableStateOf(false) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let(vm::pick) }
+    fun chooseImage() = picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Scaffold(topBar={ TopAppBar(title={ Text("WhatsApp Wallpaper Pro",fontWeight=FontWeight.Bold)}, actions={ IconButton(onClick={showInfo=true}){Icon(Icons.Default.Info,"معلومات عن التطبيق")} })}) { padding ->
             Column(Modifier.padding(padding).padding(horizontal=16.dp).fillMaxSize(), verticalArrangement=Arrangement.spacedBy(14.dp)) {
-                if(state.source==null) EmptyHome(onPick={ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
-                else Editor(state=state, onPick={ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, onBackground=vm::setBackground, onSize=vm::setSize, onZoom=vm::setZoom, onExport={ showExport=true })
-                if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if(state.source==null) EmptyHome(onPick=::chooseImage)
+                else Editor(state=state, onPick=::chooseImage, onBackground=vm::setBackground, onCustomColor=vm::setCustomColor, onSize=vm::setSize, onZoom=vm::setZoom, onExport={ showExport=true })
+                if(state.busy) LinearProgressIndicator(modifier=Modifier.fillMaxWidth())
                 state.message?.let { Text(it,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.SemiBold) }
+                state.savedUri?.let { uri ->
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp), modifier=Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick={ shareImage(context, uri) }, modifier=Modifier.weight(1f)) { Icon(Icons.Default.Share,null); Spacer(Modifier.width(6.dp)); Text("مشاركة") }
+                        OutlinedButton(onClick={ openImage(context, uri) }, modifier=Modifier.weight(1f)) { Icon(Icons.Default.FolderOpen,null); Spacer(Modifier.width(6.dp)); Text("فتح الصورة") }
+                    }
+                }
             }
         }
     }
     if(showExport) ExportDialog(state, onDismiss={showExport=false}, onFormat=vm::setFormat, onQuality=vm::setQuality, onSave={vm.save();showExport=false})
+    if(showInfo) InfoDialog(onDismiss={showInfo=false})
 }
+
+private fun shareImage(context: Context, uri: Uri) { val intent=Intent(Intent.ACTION_SEND).apply { type="image/*"; putExtra(Intent.EXTRA_STREAM,uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }; context.startActivity(Intent.createChooser(intent,"مشاركة الخلفية")) }
+private fun openImage(context: Context, uri: Uri) { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri,"image/*"); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }) } }
 
 @Composable private fun EmptyHome(onPick:()->Unit) { Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){ Icon(Icons.Default.Wallpaper,"خلفية",Modifier.size(76.dp),tint=MaterialTheme.colorScheme.primary); Spacer(Modifier.height(16.dp)); Text("حوّل صورتك إلى خلفية كاملة",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold); Text("بدون قص أو تشويه وبمعالجة محلية",color=MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(24.dp)); Button(onClick=onPick,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth().height(56.dp)){Icon(Icons.Default.AddPhotoAlternate,null);Spacer(Modifier.width(8.dp));Text("اختر صورة")} } }
 
-@Composable private fun Editor(state: com.example.whatsappwallpaperpro.ui.WallpaperUiState,onPick:()->Unit,onBackground:(BackgroundMode)->Unit,onSize:(OutputSize)->Unit,onZoom:(Float)->Unit,onExport:()->Unit){
+@Composable private fun Editor(state: WallpaperUiState,onPick:()->Unit,onBackground:(BackgroundMode)->Unit,onCustomColor:(Int)->Unit,onSize:(OutputSize)->Unit,onZoom:(Float)->Unit,onExport:()->Unit){
     Text("المعاينة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-    Box(Modifier.fillMaxWidth().height(360.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xFFECE5DD)),contentAlignment=Alignment.Center){ state.rendered?.let{Image(it.asImageBitmap(),"المعاينة",Modifier.fillMaxSize(),contentScale=ContentScale.Fit)} }
+    Box(Modifier.fillMaxWidth().height(320.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xFFECE5DD)),contentAlignment=Alignment.Center){ state.rendered?.let{Image(it.asImageBitmap(),"المعاينة",Modifier.fillMaxSize(),contentScale=ContentScale.Fit)} }
     OutlinedButton(onClick=onPick,Modifier.fillMaxWidth()){Icon(Icons.Default.ChangeCircle,null);Spacer(Modifier.width(8.dp));Text("تغيير الصورة")}
     Text("الخلفية الذكية",fontWeight=FontWeight.Bold)
     LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){ items(BackgroundMode.entries){ mode -> FilterChip(selected=state.background==mode,onClick={onBackground(mode)},label={Text(when(mode){BackgroundMode.BLUR->"ضبابية";BackgroundMode.SMART_COLOR->"لون ذكي";BackgroundMode.CUSTOM->"لون مخصص"})}) } }
+    if(state.background==BackgroundMode.CUSTOM) { Text("اختر لون الخلفية",fontWeight=FontWeight.SemiBold); LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){ items(customColors){ color -> FilterChip(selected=state.customColor==color,onClick={onCustomColor(color)},label={Box(Modifier.size(22.dp).clip(RoundedCornerShape(50)).background(Color(color)))}) } } }
     Text("المقاس",fontWeight=FontWeight.Bold)
     LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){ items(presetSizes){ size -> FilterChip(selected=state.selectedSize==size,onClick={onSize(size)},label={Text(size.label)}) } }
     Row(verticalAlignment=Alignment.CenterVertically){Text("التكبير",Modifier.width(64.dp));Slider(value=state.zoom,valueRange=0.75f..1.5f,onValueChange=onZoom,modifier=Modifier.weight(1f));Text("%.1fx".format(state.zoom))}
     Button(onClick=onExport,Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)){Icon(Icons.Default.Save,null);Spacer(Modifier.width(8.dp));Text("حفظ وتصدير")}
 }
 
-@Composable private fun ExportDialog(state: com.example.whatsappwallpaperpro.ui.WallpaperUiState,onDismiss:()->Unit,onFormat:(OutputFormat)->Unit,onQuality:(Int)->Unit,onSave:()->Unit){ AlertDialog(onDismissRequest=onDismiss,title={Text("تصدير الخلفية")},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Text("اختر الصيغة");LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(OutputFormat.entries){f->FilterChip(selected=state.format==f,onClick={onFormat(f)},label={Text(f.extension.uppercase())})}};Text("الجودة: ${state.quality}%");Slider(value=state.quality.toFloat(),onValueChange={onQuality(it.toInt())},valueRange=50f..100f,steps=9);state.rendered?.let{Image(it.asImageBitmap(),"النتيجة",Modifier.fillMaxWidth().height(180.dp),contentScale=ContentScale.Fit)}}},confirmButton={Button(onClick=onSave){Text("حفظ في المعرض")}},dismissButton={TextButton(onClick=onDismiss){Text("إلغاء")}}) }
+@Composable private fun InfoDialog(onDismiss:()->Unit) { AlertDialog(onDismissRequest=onDismiss,title={Text("عن التطبيق")},text={Text("يحوّل التطبيق أي صورة إلى خلفية مناسبة مع احتواء الصورة كاملة دون قص. تتم المعالجة والحفظ محليًا على جهازك ولا يتم رفع الصور إلى خادم خارجي.")},confirmButton={Button(onClick=onDismiss){Text("حسنًا")}}) }
+
+@Composable private fun ExportDialog(state: WallpaperUiState,onDismiss:()->Unit,onFormat:(OutputFormat)->Unit,onQuality:(Int)->Unit,onSave:()->Unit){ AlertDialog(onDismissRequest=onDismiss,title={Text("تصدير الخلفية")},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Text("اختر الصيغة");LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(OutputFormat.entries){f->FilterChip(selected=state.format==f,onClick={onFormat(f)},label={Text(f.extension.uppercase())})}};Text("الجودة: ${state.quality}%");Slider(value=state.quality.toFloat(),onValueChange={onQuality(it.toInt())},valueRange=50f..100f,steps=9);state.rendered?.let{Image(it.asImageBitmap(),"النتيجة",Modifier.fillMaxWidth().height(180.dp),contentScale=ContentScale.Fit)}}},confirmButton={Button(onClick=onSave){Text("حفظ في المعرض")}},dismissButton={TextButton(onClick=onDismiss){Text("إلغاء")}}) }
